@@ -49,3 +49,7 @@ Thumbs.db
 *.wmv
 cprotogui.depend
 cprotogui.cbp
+bin/
+obj/
+ui.h.gch
+cprotogui.layout

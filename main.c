@@ -19,9 +19,9 @@ int main(int argc, char* args[]) {
     UIH_STATE *mainState = UIHMakeState();
     if (mainState != NULL) {
         UIHInit(mainState);
-        UIHCreateWindow(mainState, "C GUI Prototype Sample", 10, 10, 350, 150);
+        UIHCreateWindow(mainState, "heck世界你好こんにちは、世界feckC GUI Prototype Sample", 10, 10, 350, 150);
 
-        UIH_CONTROL *label1 = UIHAddLabel(mainState, "Just another sample program", 0, 10, 10, 200, 50);
+        UIH_CONTROL *label1 = UIHAddLabel(mainState, "heck世界你好こんにちは、世界feck", 0, 10, 10, 200, 50);
         UIH_CONTROL *button1 = UIHAddButton(mainState, "Open Window", 0, 100, 50, 100, 50, &fnCallbackOpenWindow, NULL);
         UIHShowWindow(mainState, 1);
 
