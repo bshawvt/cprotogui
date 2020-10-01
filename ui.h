@@ -81,8 +81,8 @@ typedef struct UIH_STATE {
     wchar_t *windowClassname;
     HACCEL accelTable;
     void *datums[UIH_NUM_STATE_DATUMS]; // holds misc data like current open filenames
-    //void (*fnMenuCallback) (UIH_STATE *, int, void *);
     void *fnMenuCallback;
+    void *fnWindowResizeCallback;
     HWND hwnd;
     HDC dc;
     HFONT fonts[UIH_NUM_FONTS];
@@ -90,6 +90,10 @@ typedef struct UIH_STATE {
     UIH_INPUT_STATE keys[256];
 
 } UIH_STATE;
+
+typedef (*UIH_CALLBACK_CONTROLCALLBACK_FUNC) (UIH_STATE*, UIH_CONTROL*, void*);
+typedef (*UIH_CALLBACK_CONTROLRESIZE_FUNC)(UIH_STATE*, UIH_CONTROL*, UIH_CONTROL_RECT*);
+typedef (*UIH_CALLBACK_WINDOWRESIZE_FUNC) (UIH_STATE*, UIH_CONTROL_RECT*);
 
 //int UIHErrorCallCount = 1;
 //#define UIHErr() (printf("\n*****\n - GetLastError#%i = %i\n - in: %s\n - %s @ %i\n*****\n", UIHErrorCallCount++, (int) GetLastError(), __FUNCTION__, __FILE__, __LINE__));
@@ -107,14 +111,14 @@ char *UIHWideToChar(wchar_t *text);
 void UIHSetString(UIH_CONTROL *control, char *text);
 wchar_t *UIHGetString(UIH_CONTROL *control);
 void UIHCreateWindow(UIH_STATE *state, char *title, int x, int y, int width, int height);
-void UIHCreateOwnDCWindow(UIH_STATE *state, char *title, int x, int y, int width, int height);
+HWND UIHCreateOwnDCWindow(UIH_STATE *state, char *title, int x, int y, int width, int height, HWND parent);
 void UIHShowWindow(UIH_STATE *state, int hidden);
 int UIHMakeControl(UIH_STATE *state, char *text, int x, int y, int width, int height);
 void UIHRegisterMenuCallback(UIH_STATE *state, void *callback, void *data);
 UIH_CONTROL *UIHAddLabel(UIH_STATE *state, char *text, int fontid, int x, int y, int w, int h);
 UIH_CONTROL *UIHAddButton(UIH_STATE *state, char *text, int fontid, int x, int y, int w, int h, void* callback, void* data);
 UIH_CONTROL *UIHAddEdit(UIH_STATE *state, char *text, int fontid, int x, int y, int w, int h);
-int UIHLoadFont(UIH_STATE *state, char *fontName);
+int UIHLoadFont(UIH_STATE *state, char *fontName, int size);
 void UIHInit(UIH_STATE *state);
 void UIHClean(UIH_STATE *state);
 void UIHEventUpdate(UIH_STATE *state);

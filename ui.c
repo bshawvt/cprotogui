@@ -79,7 +79,8 @@ void UIHDoControlCallbackFromId(UIH_STATE *state, int id) {
         if (id == control->uuid) {
             if (control->fnControlCallback != NULL) {
                 HANDLE tHandle = GetPropW(control->hwnd, UIH_PROPNAME_CALLBACK);
-                void (*fnControlCallback)(UIH_STATE*, UIH_CONTROL*, void*) = (void(*)(UIH_STATE*,UIH_CONTROL*, void*))control->fnControlCallback;
+                //void (*fnControlCallback)(UIH_STATE*, UIH_CONTROL*, void*) = (void(*)(UIH_STATE*,UIH_CONTROL*, void*))control->fnControlCallback;
+                UIH_CALLBACK_CONTROLCALLBACK_FUNC fnControlCallback = (UIH_CALLBACK_CONTROLCALLBACK_FUNC) control->fnControlCallback;
                 fnControlCallback(state, control, tHandle);
             }
             break;
@@ -96,12 +97,31 @@ void UIHDoControlResizeCallback(UIH_STATE *state) {
         UIH_CONTROL *control = &state->controls[i];
         if (control->fnResizeCallback != NULL) {
             printf("UIHDoControlResizeCallback control addr = %p\n", control);
-            void (*fnResizeCallback)(UIH_STATE*, UIH_CONTROL*, UIH_CONTROL_RECT*) = (void(*)(UIH_STATE*, UIH_CONTROL*, UIH_CONTROL_RECT*))control->fnResizeCallback;
+            //void (*fnResizeCallback)(UIH_STATE*, UIH_CONTROL*, UIH_CONTROL_RECT*) = (void(*)(UIH_STATE*, UIH_CONTROL*, UIH_CONTROL_RECT*))control->fnResizeCallback;
+            UIH_CALLBACK_CONTROLRESIZE_FUNC fnResizeCallback = (UIH_CALLBACK_CONTROLRESIZE_FUNC) control->fnResizeCallback;
             fnResizeCallback(state, control, &rect);
         }
     }
     free(tmpRect);
 }
+
+
+void UIHDoOnWindowResize(UIH_STATE *state) {
+
+    if (state->fnWindowResizeCallback != NULL) {
+        UIH_CONTROL_RECT rect = {0};
+        RECT *tmpRect = (RECT*)malloc(sizeof(RECT));
+        GetWindowRect(state->hwnd, tmpRect);
+        rect.width = tmpRect->right - tmpRect->left;
+        rect.height = tmpRect->bottom - tmpRect->top;
+
+        UIH_CALLBACK_WINDOWRESIZE_FUNC fnOnResize = (UIH_CALLBACK_WINDOWRESIZE_FUNC) state->fnWindowResizeCallback;
+        fnOnResize(state, &rect);
+
+        free(tmpRect);
+    }
+}
+
 LRESULT CALLBACK windowProcCallback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) {
     int id = (unsigned short) wparam;
     //int event = ((unsigned short)(((unsigned long) wparam >> 16) & 0xFFFF));
@@ -119,13 +139,11 @@ LRESULT CALLBACK windowProcCallback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM 
                 }
                 break;
             }
-            case WM_SIZE: {
-                printf("size\n");
-                UIHDoControlResizeCallback(state);
-                break;
-            }
+            case WM_SIZE:
             case WM_SIZING: {
-                printf("size2\n");
+                //printf("size2\n");
+                UIHDoControlResizeCallback(state);
+                UIHDoOnWindowResize(state);
                 break;
             }
             case WM_CLOSE: {
@@ -265,12 +283,13 @@ void UIHCreateWindow(UIH_STATE *state, char *title, int x, int y, int width, int
     RegisterClassExW(&window);
     //UIHErr();
 
-    state->hwnd = CreateWindowExW(0, state->windowClassname, state->hwndTitle, WS_TILEDWINDOW, x, y, width, height, NULL, NULL, hInstance, NULL);
+    state->hwnd = CreateWindowExW(0, state->windowClassname, state->hwndTitle, WS_TILEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, x, y, width, height, NULL, NULL, hInstance, NULL);
     SetPropW(state->hwnd, UIH_PROPNAME_STATE, state);
 
     //UIHErr();
 }
-void UIHCreateOwnDCWindow(UIH_STATE *state, char *title, int x, int y, int width, int height) {//, HINSTANCE hInstance) {
+
+HWND UIHCreateOwnDCWindow(UIH_STATE *state, char *title, int x, int y, int width, int height, HWND parent) {//, HINSTANCE hInstance) {
     int classnameSize = MultiByteToWideChar(CP_UTF8, 0, title, -1, NULL, 0);
     int titleSize = MultiByteToWideChar(CP_UTF8, 0, title, -1, NULL, 0);
 
@@ -293,19 +312,27 @@ void UIHCreateOwnDCWindow(UIH_STATE *state, char *title, int x, int y, int width
     window.hInstance = hInstance;//hInstance;
     window.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     window.hCursor = LoadCursor(NULL, IDC_ARROW);
-    window.hbrBackground = (HBRUSH) GetStockObject(BLACK_BRUSH);
+    window.hbrBackground = (HBRUSH) COLOR_WINDOW;
     window.lpszMenuName = NULL;
     window.lpszClassName = state->windowClassname; //L"uihowndc";
     window.hIconSm = NULL;//LoadIcon(NULL, IDI_APPLICATION);
 
     RegisterClassExW(&window);
+    printf("*****\n1 getlasterror = %i\n", GetLastError());
 
-    state->hwnd = CreateWindowExW(0, state->windowClassname, state->hwndTitle, WS_OVERLAPPEDWINDOW, x, y, width, height, NULL, NULL, hInstance, NULL);
-    state->dc = GetDC(state->hwnd);
 
-    SetPropW(state->hwnd, UIH_PROPNAME_STATE, state);
-
-    //UIHErr();
+    if (parent == NULL) {
+        state->hwnd = CreateWindowExW(0, state->windowClassname, state->hwndTitle, WS_OVERLAPPEDWINDOW, x, y, width, height, NULL, NULL, hInstance, NULL);
+        state->dc = GetDC(state->hwnd);
+        SetPropW(state->hwnd, UIH_PROPNAME_STATE, state);
+    }
+    else {
+        HWND hwnd  = CreateWindowExW(0, state->windowClassname, state->hwndTitle, WS_CHILD | WS_VISIBLE, x, y, width, height, parent, NULL, hInstance, NULL);
+        state->dc = GetDC(hwnd);
+        SetPropW(hwnd, UIH_PROPNAME_STATE, state);
+        return hwnd;
+    }
+    return NULL;
 }
 void UIHShowWindow(UIH_STATE *state, int hidden) {
     if (hidden) {
@@ -379,13 +406,13 @@ UIH_CONTROL *UIHAddEdit(UIH_STATE *state, char *text, int fontid, int x, int y, 
                  MAKELPARAM(1, 0));
     return &state->controls[index];
 }
-int UIHLoadFont(UIH_STATE *state, char *fontName) {
+int UIHLoadFont(UIH_STATE *state, char *fontName, int size) {
     if (state->numberOfFonts < UIH_NUM_FONTS) {
         int index = state->numberOfFonts++;
         int fontNameSize = MultiByteToWideChar(CP_UTF8, 0, fontName, -1, NULL, 0);
         wchar_t tmpFontName[fontNameSize];
         MultiByteToWideChar(CP_UTF8, 0, fontName, -1,tmpFontName, fontNameSize);
-        state->fonts[index] = CreateFontW(14, 0, 0, 0, FW_REGULAR, 0, 0, 0, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, tmpFontName);//TEXT("Microsoft Sans Serif"));
+        state->fonts[index] = CreateFontW(size, 0, 0, 0, FW_REGULAR, 0, 0, 0, ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, tmpFontName);//TEXT("Microsoft Sans Serif"));
         return index;
     }
     else {
@@ -396,7 +423,7 @@ int UIHLoadFont(UIH_STATE *state, char *fontName) {
 void UIHInit(UIH_STATE *state) {
     setlocale(LC_ALL, "");
 
-    UIHLoadFont(state, "Microsoft Sans Serif"); // make state->fonts[0] the default font
+    UIHLoadFont(state, "Microsoft Sans Serif", 14); // make state->fonts[0] the default font
     state->nextUUID = UIH_CONTROL_UUID_RANGE;
 
     INITCOMMONCONTROLSEX c;
@@ -422,9 +449,17 @@ void UIHClean(UIH_STATE *state) {
     RemovePropW(state->hwnd, UIH_PROPNAME_STATE);
     RemovePropW(state->hwnd, UIH_PROPNAME_MENUCALLBACK);
 
+    if (state->dc != NULL) {
+        DeleteDC(state->dc);
+    }
+
+    DestroyAcceleratorTable(state->accelTable);
+    HINSTANCE hInstance = GetWindowLongPtrW(state->hwnd, GWLP_HINSTANCE);
+    UnregisterClassW(state->windowClassname, hInstance);
+
     free(state->hwndTitle);
     free(state->windowClassname);
-    DestroyAcceleratorTable(state->accelTable);
+
     state->isRunning = 0;
 
 }
